@@ -1,1 +1,754 @@
-# jmtalkmanager
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>정밀티켓 - 상담원 관리</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', sans-serif;
+            background-color: #f8f9fa;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .admin-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 320px;
+            background: white;
+            border-right: 1px solid #e9ecef;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            background: linear-gradient(135deg, #5865f2, #7289da);
+            color: white;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo {
+            width: 32px;
+            height: 32px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .admin-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .admin-info h3 {
+            font-size: 1rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .admin-info p {
+            font-size: 0.8rem;
+            opacity: 0.9;
+        }
+
+        .online-status {
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #00ff88;
+            border-radius: 50%;
+        }
+
+        .chat-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: #6c757d;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .chat-item {
+            padding: 1rem;
+            border-bottom: 1px solid #f1f3f4;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            position: relative;
+        }
+
+        .chat-item:hover {
+            background: #f8f9fa;
+        }
+
+        .chat-item.active {
+            background: #e3f2fd;
+            border-right: 3px solid #5865f2;
+        }
+
+        .chat-preview {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .customer-avatar {
+            width: 40px;
+            height: 40px;
+            background: #e9ecef;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #6c757d;
+            flex-shrink: 0;
+        }
+
+        .chat-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .customer-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 0.2rem;
+            color: #2c3e50;
+        }
+
+        .last-message {
+            font-size: 0.8rem;
+            color: #6c757d;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .chat-time {
+            font-size: 0.75rem;
+            color: #adb5bd;
+            margin-top: 0.2rem;
+        }
+
+        .unread-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: #dc3545;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        .main-chat {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            background: white;
+            padding: 1rem;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .current-customer {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .current-customer h3 {
+            color: #2c3e50;
+            font-size: 1.1rem;
+        }
+
+        .status-badge {
+            background: #28a745;
+            color: white;
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .chat-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .action-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid #e9ecef;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.3s ease;
+        }
+
+        .action-btn:hover {
+            background: #f8f9fa;
+            border-color: #5865f2;
+        }
+
+        .messages-container {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .no-chat-selected {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #6c757d;
+            font-size: 1.1rem;
+        }
+
+        .no-chat-selected svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+
+        .message {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .message.agent {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .customer-msg-avatar {
+            background: #e9ecef;
+            color: #6c757d;
+        }
+
+        .agent-msg-avatar {
+            background: linear-gradient(135deg, #5865f2, #7289da);
+            color: white;
+        }
+
+        .message-content {
+            background: white;
+            padding: 0.75rem 1rem;
+            border-radius: 18px;
+            max-width: 70%;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .message.agent .message-content {
+            background: #5865f2;
+            color: white;
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            color: #adb5bd;
+            margin-top: 0.25rem;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 0.5rem 1rem;
+            color: #6c757d;
+            font-style: italic;
+            font-size: 0.85rem;
+        }
+
+        .agent-input {
+            background: white;
+            border-top: 1px solid #e9ecef;
+            padding: 1rem;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-end;
+        }
+
+        .quick-responses {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .quick-btn {
+            padding: 0.4rem 0.8rem;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .quick-btn:hover {
+            background: #5865f2;
+            color: white;
+            border-color: #5865f2;
+        }
+
+        .input-field {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid #e9ecef;
+            border-radius: 20px;
+            outline: none;
+            font-size: 0.9rem;
+            resize: none;
+            min-height: 40px;
+            max-height: 100px;
+        }
+
+        .input-field:focus {
+            border-color: #5865f2;
+            box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.1);
+        }
+
+        .send-btn {
+            width: 40px;
+            height: 40px;
+            background: #5865f2;
+            border: none;
+            border-radius: 50%;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s ease;
+        }
+
+        .send-btn:hover {
+            background: #4752c4;
+        }
+
+        .send-btn:disabled {
+            background: #adb5bd;
+            cursor: not-allowed;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            z-index: 1000;
+        }
+
+        .connection-status.offline {
+            background: #dc3545;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                position: absolute;
+                height: 100%;
+                z-index: 10;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main-chat {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status" id="connectionStatus">🟢 시스템 온라인</div>
+
+    <div class="admin-container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">정</div>
+                <div class="admin-info">
+                    <h3>정밀티켓 상담원</h3>
+                    <p id="customerCount">대기중인 고객: 0명</p>
+                    <div class="online-status">
+                        <div class="status-dot"></div>
+                        <span>온라인</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-list" id="chatList">
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20,2H4A2,2 0 0,0 2,4V22L6,18H20A2,2 0 0,0 22,16V4A2,2 0 0,0 20,2M6,9V7H18V9H6M14,11V13H6V11H14M18,15H6V17H18V15Z"/>
+                    </svg>
+                    <h4>상담 대기중</h4>
+                    <p>새로운 고객 문의를 기다리고 있습니다</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-chat" id="mainChat">
+            <div class="no-chat-selected">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12,3C17.5,3 22,6.58 22,11C22,15.42 17.5,19 12,19C10.76,19 9.57,18.82 8.47,18.5C5.55,21 2,21 2,21C4.33,18.67 4.7,17.1 4.75,16.5C3.05,15.07 2,13.13 2,11C2,6.58 6.5,3 12,3Z"/>
+                </svg>
+                <h3>채팅을 선택해주세요</h3>
+                <p>왼쪽에서 고객을 선택하여 상담을 시작하세요</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentChatId = null;
+        let customers = {};
+        let agentOnline = true;
+
+        // 상담원 온라인 상태 설정
+        function setAgentOnline() {
+            agentOnline = true;
+            const chatData = JSON.parse(localStorage.getItem('chatData') || '{}');
+            chatData.agentOnline = true;
+            localStorage.setItem('chatData', JSON.stringify(chatData));
+            
+            document.getElementById('connectionStatus').textContent = '🟢 시스템 온라인';
+            document.getElementById('connectionStatus').className = 'connection-status';
+        }
+
+        // 고객 목록 업데이트
+        function updateCustomerList() {
+            const chatData = JSON.parse(localStorage.getItem('chatData') || '{}');
+            const chatList = document.getElementById('chatList');
+            
+            if (!chatData.customer || !chatData.customer.messages || chatData.customer.messages.length === 0) {
+                chatList.innerHTML = `
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M20,2H4A2,2 0 0,0 2,4V22L6,18H20A2,2 0 0,0 22,16V4A2,2 0 0,0 20,2M6,9V7H18V9H6M14,11V13H6V11H14M18,15H6V17H18V15Z"/>
+                        </svg>
+                        <h4>상담 대기중</h4>
+                        <p>새로운 고객 문의를 기다리고 있습니다</p>
+                    </div>
+                `;
+                document.getElementById('customerCount').textContent = '대기중인 고객: 0명';
+                return;
+            }
+
+            const customer = chatData.customer;
+            const lastMessage = customer.messages[customer.messages.length - 1];
+            const unreadCount = customer.messages.filter(msg => msg.type === 'customer').length - 
+                               customer.messages.filter(msg => msg.type === 'agent').length;
+
+            chatList.innerHTML = `
+                <div class="chat-item ${currentChatId === customer.id ? 'active' : ''}" onclick="selectCustomer('${customer.id}')">
+                    <div class="chat-preview">
+                        <div class="customer-avatar">고</div>
+                        <div class="chat-info">
+                            <div class="customer-name">실시간 고객</div>
+                            <div class="last-message">${lastMessage ? lastMessage.content.substring(0, 30) + '...' : '대화를 시작하세요'}</div>
+                            <div class="chat-time">${lastMessage ? lastMessage.time : ''}</div>
+                        </div>
+                    </div>
+                    ${unreadCount > 0 ? `<div class="unread-badge">${unreadCount}</div>` : ''}
+                </div>
+            `;
+            
+            document.getElementById('customerCount').textContent = `대기중인 고객: 1명`;
+        }
+
+        // 고객 선택
+        function selectCustomer(customerId) {
+            currentChatId = customerId;
+            const chatData = JSON.parse(localStorage.getItem('chatData') || '{}');
+            const customer = chatData.customer;
+            
+            if (!customer) return;
+
+            // 메인 채팅 영역 업데이트
+            const mainChat = document.getElementById('mainChat');
+            mainChat.innerHTML = `
+                <div class="chat-header">
+                    <div class="current-customer">
+                        <div class="customer-avatar">고</div>
+                        <div>
+                            <h3>실시간 고객</h3>
+                            <span class="status-badge">진행중</span>
+                        </div>
+                    </div>
+                    <div class="chat-actions">
+                        <button class="action-btn" onclick="showCustomerInfo()">고객 정보</button>
+                        <button class="action-btn" onclick="endChat()">상담 종료</button>
+                    </div>
+                </div>
+
+                <div class="messages-container" id="messagesContainer">
+                </div>
+
+                <div class="typing-indicator" id="typingIndicator">
+                    고객이 입력 중입니다...
+                </div>
+
+                <div class="agent-input">
+                    <div class="quick-responses">
+                        <button class="quick-btn" onclick="insertQuickResponse('안녕하세요! 정밀티켓입니다. 무엇을 도와드릴까요?')">인사</button>
+                        <button class="quick-btn" onclick="insertQuickResponse('네, 확인해드리겠습니다. 잠시만 기다려주세요.')">확인중</button>
+                        <button class="quick-btn" onclick="insertQuickResponse('추가로 궁금한 점이 있으시면 언제든 문의해 주세요.')">마무리</button>
+                        <button class="quick-btn" onclick="insertQuickResponse('문제가 해결되셨나요?')">해결확인</button>
+                    </div>
+                    <div class="input-row">
+                        <textarea class="input-field" id="agentInput" placeholder="고객에게 보낼 메시지를 입력하세요..." onkeypress="handleKeyPress(event)"></textarea>
+                        <button class="send-btn" onclick="sendAgentMessage()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M2,21L23,12L2,3V10L17,12L2,14V21Z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            // 메시지 히스토리 로드
+            loadMessageHistory(customer);
+            updateCustomerList();
+        }
+
+        // 메시지 히스토리 로드
+        function loadMessageHistory(customer) {
+            const container = document.getElementById('messagesContainer');
+            container.innerHTML = '';
+
+            customer.messages.forEach(msg => {
+                addMessageToContainer(msg);
+            });
+
+            scrollToBottom();
+        }
+
+        // 메시지 컨테이너에 추가
+        function addMessageToContainer(messageObj) {
+            const container = document.getElementById('messagesContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${messageObj.type === 'agent' ? 'agent' : ''}`;
+            
+            const avatarClass = messageObj.type === 'agent' ? 'agent-msg-avatar' : 'customer-msg-avatar';
+            const avatarText = messageObj.type === 'agent' ? '정' : '고';
+            
+            messageDiv.innerHTML = `
+                <div class="message-avatar ${avatarClass}">${avatarText}</div>
+                <div>
+                    <div class="message-content">${messageObj.content}</div>
+                    <div class="message-time">${messageObj.time}</div>
+                </div>
+            `;
+            
+            container.appendChild(messageDiv);
+        }
+
+        // 상담원 메시지 전송
+        function sendAgentMessage() {
+            const input = document.getElementById('agentInput');
+            const message = input.value.trim();
+            
+            if (!message || !currentChatId) return;
+            
+            const messageObj = {
+                id: Date.now(),
+                type: 'agent',
+                content: message,
+                time: getCurrentTime(),
+                timestamp: Date.now()
+            };
+            
+            // 로컬 표시
+            addMessageToContainer(messageObj);
+            
+            // localStorage에 저장하여 고객과 공유
+            const chatData = JSON.parse(localStorage.getItem('chatData') || '{}');
+            if (!chatData.agentMessages) {
+                chatData.agentMessages = [];
+            }
+            chatData.agentMessages.push(messageObj);
+            
+            // 고객 데이터에도 추가
+            if (chatData.customer) {
+                chatData.customer.messages.push(messageObj);
+            }
+            
+            localStorage.setItem('chatData', JSON.stringify(chatData));
+            
+            input.value = '';
+            scrollToBottom();
+            updateCustomerList();
+        }
+
+        // 빠른 응답 삽입
+        function insertQuickResponse(text) {
+            const input = document.getElementById('agentInput');
+            if (input) {
+                input.value = text;
+                input.focus();
+            }
+        }
+
+        // 현재 시간
+        function getCurrentTime() {
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const ampm = hours >= 12 ? '오후' : '오전';
+            const displayHours = hours % 12 || 12;
+            return `${ampm} ${displayHours}:${minutes.toString().padStart(2, '0')}`;
+        }
+
+        // 스크롤 하단으로
+        function scrollToBottom() {
+            const container = document.getElementById('messagesContainer');
+            if (container) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        // 키 입력 처리
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendAgentMessage();
+            }
+        }
+
+        // 고객 정보 표시
+        function showCustomerInfo() {
+            alert('고객 정보:\n\n- 이름: 실시간 고객\n- 접속 시간: ' + new Date().toLocaleString() + '\n- 상담 상태: 진행중');
+        }
+
+        // 상담 종료
+        function endChat() {
+            if (confirm('상담을 종료하시겠습니까?')) {
+                currentChatId = null;
+                const mainChat = document.getElementById('mainChat');
+                mainChat.innerHTML = `
+                    <div class="no-chat-selected">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12,3C17.5,3 22,6.58 22,11C22,15.42 17.5,19 12,19C10.76,19 9.57,18.82 8.47,18.5C5.55,21 2,21 2,21C4.33,18.67 4.7,17.1 4.75,16.5C3.05,15.07 2,13.13 2,11C2,6.58 6.5,3 12,3Z"/>
+                        </svg>
+                        <h3>상담이 종료되었습니다</h3>
+                        <p>새로운 고객 문의를 기다리고 있습니다</p>
+                    </div>
+                `;
+                updateCustomerList();
+            }
+        }
+
+        // 새 메시지 확인
+        function checkForNewMessages() {
+            if (!currentChatId) return;
+            
+            const chatData = JSON.parse(localStorage.getItem('chatData') || '{}');
+            if (!chatData.customer) return;
+            
+            const customer = chatData.customer;
+            const container = document.getElementById('messagesContainer');
+            
+            if (container) {
+                const currentMessages = container.children.length;
+                const totalMessages = customer.messages.length;
+                
+                if (totalMessages > currentMessages) {
+                    // 새 메시지가 있음
+                    const newMessages = customer.messages.slice(currentMessages);
+                    newMessages.forEach(msg => {
+                        addMessageToContainer(msg);
+                    });
+                    scrollToBottom();
+                }
+            }
+            
+            updateCustomerList();
+        }
+
+        // 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            setAgentOnline();
+            updateCustomerList();
+            
+            // 주기적으로 새 메시지 확인
+            setInterval(checkForNewMessages, 1000);
+            setInterval(updateCustomerList, 2000);
+        });
+
+        // 페이지 종료 시 오프라인 설정
+        window.addEventListener('beforeunload', function() {
+            const chatData = JSON.parse(localStorage.getItem('chatData') || '{}');
+            chatData.agentOnline = false;
+            localStorage.setItem('chatData', JSON.stringify(chatData));
+        });
+    </script>
+</body>
+</html>
