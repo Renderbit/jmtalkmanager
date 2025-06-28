@@ -391,15 +391,6 @@
             z-index: 1000;
         }
 
-        .connection-status.offline {
-            background: #dc3545;
-        }
-
-        .connection-status.connecting {
-            background: #ffc107;
-            color: #000;
-        }
-
         @media (max-width: 768px) {
             .sidebar {
                 width: 100%;
@@ -421,7 +412,7 @@
     </style>
 </head>
 <body>
-    <div class="connection-status connecting" id="connectionStatus">🟡 연결 중...</div>
+    <div class="connection-status" id="connectionStatus">🟢 시스템 온라인</div>
 
     <div class="admin-container">
         <div class="sidebar">
@@ -459,55 +450,27 @@
         </div>
     </div>
 
-    <script type="module">
-        // Firebase 설정 (고객용과 동일)
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getDatabase, ref, push, onValue, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyA8K3QoRj_Yr8qrF5EzCMwGx6Qf9Wd",
-            authDomain: "jungmil-chat-f1e23.firebaseapp.com",
-            databaseURL: "https://jungmil-chat-f1e23-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "jungmil-chat-f1e23",
-            storageBucket: "jungmil-chat-f1e23.appspot.com",
-            messagingSenderId: "987654321098",
-            appId: "1:987654321098:web:fedcba654321"
-        };
-
-        let app, database;
+    <script>
+        // 상담원 변수
         let currentCustomerId = null;
         let customers = {};
-        let allMessages = {};
-
-        // Firebase 초기화 시도
-        try {
-            app = initializeApp(firebaseConfig);
-            database = getDatabase(app);
-            updateConnectionStatus('connected');
-        } catch (error) {
-            console.log('Firebase 연결 실패, localStorage 모드로 전환');
-            updateConnectionStatus('offline');
-        }
-
-        // 연결 상태 업데이트
-        function updateConnectionStatus(status) {
-            const statusElement = document.getElementById('connectionStatus');
-            if (status === 'connected') {
-                statusElement.textContent = '🟢 시스템 온라인';
-                statusElement.className = 'connection-status';
-            } else if (status === 'connecting') {
-                statusElement.textContent = '🟡 연결 중...';
-                statusElement.className = 'connection-status connecting';
-            } else {
-                statusElement.textContent = '🔴 오프라인 모드';
-                statusElement.className = 'connection-status offline';
-            }
-        }
+        let lastUpdateTime = 0;
 
         // 고객 목록 업데이트
         function updateCustomerList() {
+            const messages = JSON.parse(localStorage.getItem('jm_chat_messages') || '[]');
             const chatList = document.getElementById('chatList');
-            const customerIds = Object.keys(customers);
+            
+            // 고객별 메시지 그룹화
+            const customerData = {};
+            messages.forEach(msg => {
+                if (!customerData[msg.customerId]) {
+                    customerData[msg.customerId] = [];
+                }
+                customerData[msg.customerId].push(msg);
+            });
+
+            const customerIds = Object.keys(customerData);
             
             if (customerIds.length === 0) {
                 chatList.innerHTML = `
@@ -525,10 +488,18 @@
 
             let chatListHTML = '';
             customerIds.forEach(customerId => {
-                const customerMessages = Object.values(allMessages).filter(msg => msg.customerId === customerId);
+                const customerMessages = customerData[customerId].sort((a, b) => a.timestamp - b.timestamp);
                 const lastMessage = customerMessages[customerMessages.length - 1];
                 const unreadCount = customerMessages.filter(msg => msg.type === 'customer').length - 
                                    customerMessages.filter(msg => msg.type === 'agent').length;
+
+                // 고객 정보 저장
+                customers[customerId] = {
+                    id: customerId,
+                    name: `고객 ${customerId.slice(-4)}`,
+                    messages: customerMessages,
+                    lastMessage: lastMessage
+                };
 
                 chatListHTML += `
                     <div class="chat-item ${currentCustomerId === customerId ? 'active' : ''}" onclick="selectCustomer('${customerId}')">
@@ -596,17 +567,14 @@
 
         // 메시지 로드
         function loadCustomerMessages() {
-            if (!currentCustomerId) return;
+            if (!currentCustomerId || !customers[currentCustomerId]) return;
 
             const container = document.getElementById('messagesContainer');
             if (!container) return;
 
             container.innerHTML = '';
 
-            const customerMessages = Object.values(allMessages)
-                .filter(msg => msg.customerId === currentCustomerId)
-                .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-
+            const customerMessages = customers[currentCustomerId].messages;
             customerMessages.forEach(msg => {
                 addMessageToContainer(msg);
             });
@@ -659,27 +627,17 @@
             input.value = '';
             scrollToBottom();
             
-            // Firebase 또는 localStorage에 저장
-            if (database) {
-                try {
-                    push(ref(database, 'messages'), messageData);
-                } catch (error) {
-                    saveToLocalStorage(messageData);
-                }
-            } else {
-                saveToLocalStorage(messageData);
-            }
-        };
-
-        // localStorage에 저장
-        function saveToLocalStorage(messageData) {
-            const messages = JSON.parse(localStorage.getItem('chat_messages') || '[]');
+            // localStorage에 저장
+            let messages = JSON.parse(localStorage.getItem('jm_chat_messages') || '[]');
             messages.push(messageData);
-            localStorage.setItem('chat_messages', JSON.stringify(messages));
+            localStorage.setItem('jm_chat_messages', JSON.stringify(messages));
             
-            // allMessages 업데이트
-            allMessages[messageData.id] = messageData;
-        }
+            // 업데이트 플래그 설정
+            localStorage.setItem('jm_chat_updated', Date.now().toString());
+            
+            // 고객 목록 업데이트
+            updateCustomerList();
+        };
 
         // 빠른 응답 삽입
         window.insertQuickResponse = function(text) {
@@ -737,71 +695,13 @@
             }
         };
 
-        // Firebase 실시간 수신 또는 localStorage 모니터링
-        if (database) {
-            onValue(ref(database, 'messages'), (snapshot) => {
-                const messages = snapshot.val();
-                if (!messages) {
-                    allMessages = {};
-                    return;
-                }
-
-                allMessages = messages;
+        // 메시지 변경 감지
+        function checkForUpdates() {
+            const currentUpdate = localStorage.getItem('jm_chat_updated');
+            if (currentUpdate && parseInt(currentUpdate) > lastUpdateTime) {
+                lastUpdateTime = parseInt(currentUpdate);
+                updateCustomerList();
                 
-                // 고객 목록 업데이트
-                const customerIds = [...new Set(Object.values(messages).map(msg => msg.customerId))];
-                customerIds.forEach(customerId => {
-                    if (!customers[customerId]) {
-                        customers[customerId] = {
-                            id: customerId,
-                            name: `고객 ${customerId.slice(-4)}`,
-                            online: true
-                        };
-                    }
-                });
-
-                updateCustomerList();
-
-                if (currentCustomerId) {
-                    loadCustomerMessages();
-                }
-            });
-
-            // 연결 상태 모니터링
-            const connectedRef = ref(database, '.info/connected');
-            onValue(connectedRef, (snapshot) => {
-                if (snapshot.val()) {
-                    updateConnectionStatus('connected');
-                } else {
-                    updateConnectionStatus('offline');
-                }
-            });
-        } else {
-            // localStorage 모드
-            setInterval(() => {
-                checkLocalStorageMessages();
-            }, 1000);
-        }
-
-        // localStorage 메시지 체크
-        function checkLocalStorageMessages() {
-            const messages = JSON.parse(localStorage.getItem('chat_messages') || '[]');
-            
-            if (messages.length > Object.keys(allMessages).length) {
-                messages.forEach(msg => {
-                    allMessages[msg.id] = msg;
-                    
-                    if (!customers[msg.customerId]) {
-                        customers[msg.customerId] = {
-                            id: msg.customerId,
-                            name: `고객 ${msg.customerId.slice(-4)}`,
-                            online: true
-                        };
-                    }
-                });
-
-                updateCustomerList();
-
                 if (currentCustomerId) {
                     loadCustomerMessages();
                 }
@@ -809,12 +709,12 @@
         }
 
         // 초기화
-        updateConnectionStatus('connecting');
-        setTimeout(() => {
-            if (!database) {
-                updateConnectionStatus('offline');
-            }
-        }, 2000);
+        updateCustomerList();
+        
+        // 1초마다 업데이트 체크
+        setInterval(checkForUpdates, 1000);
+        
+        console.log('상담원 관리 시스템 시작');
     </script>
 </body>
 </html>
