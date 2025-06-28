@@ -308,14 +308,6 @@
             margin-top: 0.25rem;
         }
 
-        .typing-indicator {
-            display: none;
-            padding: 0.5rem 1rem;
-            color: #6c757d;
-            font-style: italic;
-            font-size: 0.85rem;
-        }
-
         .agent-input {
             background: white;
             border-top: 1px solid #e9ecef;
@@ -429,7 +421,7 @@
     </style>
 </head>
 <body>
-    <div class="connection-status" id="connectionStatus">🟢 시스템 온라인</div>
+    <div class="connection-status" id="connectionStatus">🟡 연결 중...</div>
 
     <div class="admin-container">
         <div class="sidebar">
@@ -467,28 +459,46 @@
         </div>
     </div>
 
-    <script>
-        let currentChatId = null;
-        let customers = {};
-        let agentOnline = true;
+    <script type="module">
+        // Firebase 설정 - 고객용과 동일한 설정
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase, ref, push, onValue, serverTimestamp, query, orderByChild } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 
-        // 상담원 온라인 상태 설정
-        function setAgentOnline() {
-            agentOnline = true;
-            const chatData = JSON.parse(localStorage.getItem('chatData') || '{}');
-            chatData.agentOnline = true;
-            localStorage.setItem('chatData', JSON.stringify(chatData));
-            
-            document.getElementById('connectionStatus').textContent = '🟢 시스템 온라인';
-            document.getElementById('connectionStatus').className = 'connection-status';
+        const firebaseConfig = {
+            apiKey: "AIzaSyDvQ9fLKzxE9gJ2jP3mN8sL5rY4wX6vT2c",
+            authDomain: "jungmil-chat-demo.firebaseapp.com",
+            databaseURL: "https://jungmil-chat-demo-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "jungmil-chat-demo",
+            storageBucket: "jungmil-chat-demo.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:abcdef123456"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        let currentCustomerId = null;
+        let customers = {};
+        let allMessages = {};
+
+        // 연결 상태 업데이트
+        function updateConnectionStatus(connected) {
+            const status = document.getElementById('connectionStatus');
+            if (connected) {
+                status.textContent = '🟢 시스템 온라인';
+                status.className = 'connection-status';
+            } else {
+                status.textContent = '🔴 연결 끊김';
+                status.className = 'connection-status offline';
+            }
         }
 
         // 고객 목록 업데이트
         function updateCustomerList() {
-            const chatData = JSON.parse(localStorage.getItem('chatData') || '{}');
             const chatList = document.getElementById('chatList');
+            const customerIds = Object.keys(customers);
             
-            if (!chatData.customer || !chatData.customer.messages || chatData.customer.messages.length === 0) {
+            if (customerIds.length === 0) {
                 chatList.innerHTML = `
                     <div class="empty-state">
                         <svg viewBox="0 0 24 24" fill="currentColor">
@@ -502,35 +512,35 @@
                 return;
             }
 
-            const customer = chatData.customer;
-            const lastMessage = customer.messages[customer.messages.length - 1];
-            const unreadCount = customer.messages.filter(msg => msg.type === 'customer').length - 
-                               customer.messages.filter(msg => msg.type === 'agent').length;
+            let chatListHTML = '';
+            customerIds.forEach(customerId => {
+                const customer = customers[customerId];
+                const customerMessages = Object.values(allMessages).filter(msg => msg.customerId === customerId);
+                const lastMessage = customerMessages[customerMessages.length - 1];
+                const unreadCount = customerMessages.filter(msg => msg.type === 'customer' && !msg.read).length;
 
-            chatList.innerHTML = `
-                <div class="chat-item ${currentChatId === customer.id ? 'active' : ''}" onclick="selectCustomer('${customer.id}')">
-                    <div class="chat-preview">
-                        <div class="customer-avatar">고</div>
-                        <div class="chat-info">
-                            <div class="customer-name">실시간 고객</div>
-                            <div class="last-message">${lastMessage ? lastMessage.content.substring(0, 30) + '...' : '대화를 시작하세요'}</div>
-                            <div class="chat-time">${lastMessage ? lastMessage.time : ''}</div>
+                chatListHTML += `
+                    <div class="chat-item ${currentCustomerId === customerId ? 'active' : ''}" onclick="selectCustomer('${customerId}')">
+                        <div class="chat-preview">
+                            <div class="customer-avatar">고</div>
+                            <div class="chat-info">
+                                <div class="customer-name">고객 ${customerId.slice(-4)}</div>
+                                <div class="last-message">${lastMessage ? (lastMessage.content.length > 30 ? lastMessage.content.substring(0, 30) + '...' : lastMessage.content) : '대화를 시작하세요'}</div>
+                                <div class="chat-time">${lastMessage ? lastMessage.time : ''}</div>
+                            </div>
                         </div>
+                        ${unreadCount > 0 ? `<div class="unread-badge">${unreadCount}</div>` : ''}
                     </div>
-                    ${unreadCount > 0 ? `<div class="unread-badge">${unreadCount}</div>` : ''}
-                </div>
-            `;
-            
-            document.getElementById('customerCount').textContent = `대기중인 고객: 1명`;
+                `;
+            });
+
+            chatList.innerHTML = chatListHTML;
+            document.getElementById('customerCount').textContent = `대기중인 고객: ${customerIds.length}명`;
         }
 
         // 고객 선택
-        function selectCustomer(customerId) {
-            currentChatId = customerId;
-            const chatData = JSON.parse(localStorage.getItem('chatData') || '{}');
-            const customer = chatData.customer;
-            
-            if (!customer) return;
+        window.selectCustomer = function(customerId) {
+            currentCustomerId = customerId;
 
             // 메인 채팅 영역 업데이트
             const mainChat = document.getElementById('mainChat');
@@ -539,7 +549,7 @@
                     <div class="current-customer">
                         <div class="customer-avatar">고</div>
                         <div>
-                            <h3>실시간 고객</h3>
+                            <h3>고객 ${customerId.slice(-4)}</h3>
                             <span class="status-badge">진행중</span>
                         </div>
                     </div>
@@ -550,10 +560,6 @@
                 </div>
 
                 <div class="messages-container" id="messagesContainer">
-                </div>
-
-                <div class="typing-indicator" id="typingIndicator">
-                    고객이 입력 중입니다...
                 </div>
 
                 <div class="agent-input">
@@ -574,17 +580,24 @@
                 </div>
             `;
 
-            // 메시지 히스토리 로드
-            loadMessageHistory(customer);
+            loadCustomerMessages();
             updateCustomerList();
-        }
+        };
 
-        // 메시지 히스토리 로드
-        function loadMessageHistory(customer) {
+        // 고객 메시지 로드
+        function loadCustomerMessages() {
+            if (!currentCustomerId) return;
+
             const container = document.getElementById('messagesContainer');
+            if (!container) return;
+
             container.innerHTML = '';
 
-            customer.messages.forEach(msg => {
+            const customerMessages = Object.values(allMessages)
+                .filter(msg => msg.customerId === currentCustomerId)
+                .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+            customerMessages.forEach(msg => {
                 addMessageToContainer(msg);
             });
 
@@ -592,19 +605,21 @@
         }
 
         // 메시지 컨테이너에 추가
-        function addMessageToContainer(messageObj) {
+        function addMessageToContainer(messageData) {
             const container = document.getElementById('messagesContainer');
+            if (!container) return;
+
             const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${messageObj.type === 'agent' ? 'agent' : ''}`;
+            messageDiv.className = `message ${messageData.type === 'agent' ? 'agent' : ''}`;
             
-            const avatarClass = messageObj.type === 'agent' ? 'agent-msg-avatar' : 'customer-msg-avatar';
-            const avatarText = messageObj.type === 'agent' ? '정' : '고';
+            const avatarClass = messageData.type === 'agent' ? 'agent-msg-avatar' : 'customer-msg-avatar';
+            const avatarText = messageData.type === 'agent' ? '정' : '고';
             
             messageDiv.innerHTML = `
                 <div class="message-avatar ${avatarClass}">${avatarText}</div>
                 <div>
-                    <div class="message-content">${messageObj.content}</div>
-                    <div class="message-time">${messageObj.time}</div>
+                    <div class="message-content">${messageData.content}</div>
+                    <div class="message-time">${messageData.time}</div>
                 </div>
             `;
             
@@ -612,52 +627,39 @@
         }
 
         // 상담원 메시지 전송
-        function sendAgentMessage() {
+        window.sendAgentMessage = function() {
             const input = document.getElementById('agentInput');
+            if (!input || !currentCustomerId) return;
+
             const message = input.value.trim();
+            if (!message) return;
             
-            if (!message || !currentChatId) return;
-            
-            const messageObj = {
+            const messageData = {
                 id: Date.now(),
+                customerId: currentCustomerId,
                 type: 'agent',
                 content: message,
+                timestamp: serverTimestamp(),
                 time: getCurrentTime(),
-                timestamp: Date.now()
+                read: true
             };
             
-            // 로컬 표시
-            addMessageToContainer(messageObj);
-            
-            // localStorage에 저장하여 고객과 공유
-            const chatData = JSON.parse(localStorage.getItem('chatData') || '{}');
-            if (!chatData.agentMessages) {
-                chatData.agentMessages = [];
-            }
-            chatData.agentMessages.push(messageObj);
-            
-            // 고객 데이터에도 추가
-            if (chatData.customer) {
-                chatData.customer.messages.push(messageObj);
-            }
-            
-            localStorage.setItem('chatData', JSON.stringify(chatData));
+            // Firebase에 메시지 저장
+            push(ref(database, 'messages'), messageData);
             
             input.value = '';
-            scrollToBottom();
-            updateCustomerList();
-        }
+        };
 
         // 빠른 응답 삽입
-        function insertQuickResponse(text) {
+        window.insertQuickResponse = function(text) {
             const input = document.getElementById('agentInput');
             if (input) {
                 input.value = text;
                 input.focus();
             }
-        }
+        };
 
-        // 현재 시간
+        // 유틸리티 함수들
         function getCurrentTime() {
             const now = new Date();
             const hours = now.getHours();
@@ -667,7 +669,6 @@
             return `${ampm} ${displayHours}:${minutes.toString().padStart(2, '0')}`;
         }
 
-        // 스크롤 하단으로
         function scrollToBottom() {
             const container = document.getElementById('messagesContainer');
             if (container) {
@@ -675,23 +676,22 @@
             }
         }
 
-        // 키 입력 처리
-        function handleKeyPress(event) {
+        window.handleKeyPress = function(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
                 sendAgentMessage();
             }
-        }
+        };
 
-        // 고객 정보 표시
-        function showCustomerInfo() {
-            alert('고객 정보:\n\n- 이름: 실시간 고객\n- 접속 시간: ' + new Date().toLocaleString() + '\n- 상담 상태: 진행중');
-        }
+        window.showCustomerInfo = function() {
+            if (currentCustomerId) {
+                alert(`고객 정보:\n\n- ID: ${currentCustomerId}\n- 접속 시간: ${new Date().toLocaleString()}\n- 상담 상태: 진행중`);
+            }
+        };
 
-        // 상담 종료
-        function endChat() {
+        window.endChat = function() {
             if (confirm('상담을 종료하시겠습니까?')) {
-                currentChatId = null;
+                currentCustomerId = null;
                 const mainChat = document.getElementById('mainChat');
                 mainChat.innerHTML = `
                     <div class="no-chat-selected">
@@ -704,51 +704,72 @@
                 `;
                 updateCustomerList();
             }
-        }
+        };
 
-        // 새 메시지 확인
-        function checkForNewMessages() {
-            if (!currentChatId) return;
-            
-            const chatData = JSON.parse(localStorage.getItem('chatData') || '{}');
-            if (!chatData.customer) return;
-            
-            const customer = chatData.customer;
-            const container = document.getElementById('messagesContainer');
-            
-            if (container) {
-                const currentMessages = container.children.length;
-                const totalMessages = customer.messages.length;
-                
-                if (totalMessages > currentMessages) {
-                    // 새 메시지가 있음
-                    const newMessages = customer.messages.slice(currentMessages);
-                    newMessages.forEach(msg => {
-                        addMessageToContainer(msg);
-                    });
-                    scrollToBottom();
-                }
+        // 실시간 메시지 수신
+        onValue(ref(database, 'messages'), (snapshot) => {
+            const messages = snapshot.val();
+            if (!messages) {
+                allMessages = {};
+                return;
             }
-            
+
+            allMessages = messages;
+
+            // 고객 목록 업데이트
+            const customerIds = [...new Set(Object.values(messages).map(msg => msg.customerId))];
+            customerIds.forEach(customerId => {
+                if (!customers[customerId]) {
+                    customers[customerId] = {
+                        id: customerId,
+                        name: `고객 ${customerId.slice(-4)}`,
+                        online: true
+                    };
+                }
+            });
+
             updateCustomerList();
-        }
+
+            // 현재 선택된 고객의 메시지 업데이트
+            if (currentCustomerId) {
+                loadCustomerMessages();
+            }
+        });
+
+        // 고객 상태 모니터링
+        onValue(ref(database, 'customers'), (snapshot) => {
+            const customersData = snapshot.val();
+            if (customersData) {
+                Object.keys(customersData).forEach(customerId => {
+                    if (!customers[customerId]) {
+                        customers[customerId] = {
+                            id: customerId,
+                            name: `고객 ${customerId.slice(-4)}`,
+                            online: true
+                        };
+                    }
+                });
+                updateCustomerList();
+            }
+        });
+
+        // 연결 상태 모니터링
+        const connectedRef = ref(database, '.info/connected');
+        onValue(connectedRef, (snapshot) => {
+            updateConnectionStatus(snapshot.val());
+        });
+
+        // 상담원 온라인 상태 설정
+        const agentRef = ref(database, 'agents/agent1');
+        push(agentRef, {
+            name: '상담원',
+            online: true,
+            lastSeen: serverTimestamp()
+        });
 
         // 초기화
-        document.addEventListener('DOMContentLoaded', function() {
-            setAgentOnline();
-            updateCustomerList();
-            
-            // 주기적으로 새 메시지 확인
-            setInterval(checkForNewMessages, 1000);
-            setInterval(updateCustomerList, 2000);
-        });
-
-        // 페이지 종료 시 오프라인 설정
-        window.addEventListener('beforeunload', function() {
-            const chatData = JSON.parse(localStorage.getItem('chatData') || '{}');
-            chatData.agentOnline = false;
-            localStorage.setItem('chatData', JSON.stringify(chatData));
-        });
+        updateConnectionStatus(false);
+        updateCustomerList();
     </script>
 </body>
 </html>
